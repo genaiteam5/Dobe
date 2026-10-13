@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>도깨비 목소리</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07080d;
+    --panel: rgba(18, 22, 34, 0.72);
+    --line: rgba(120, 255, 230, 0.16);
+    --text: #e6efe9;
+    --muted: #8a98a0;
+    --fire: #6ff7e0;      /* 도깨비불 청록 */
+    --fire-2: #3a8cff;    /* 푸른 불꽃 */
+    --ember: #ff5a3c;     /* 녹음 표시 */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Gowun Batang", "Nanum Myeongjo", serif;
+    overflow-x: hidden;
+  }
+
+  /* 떠다니는 도깨비불 */
+  .wisps { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+  .wisp {
+    position: absolute; width: 220px; height: 220px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(111,247,224,.35), rgba(58,140,255,.12) 40%, transparent 70%);
+    filter: blur(8px);
+    animation: drift 18s ease-in-out infinite;
+  }
+  .wisp:nth-child(1) { left: 6%;  top: 12%; }
+  .wisp:nth-child(2) { right: 8%; top: 40%; width: 160px; height: 160px; animation-duration: 23s; animation-delay: -6s; }
+  .wisp:nth-child(3) { left: 30%; bottom: 4%; width: 120px; height: 120px; animation-duration: 15s; animation-delay: -3s; }
+  @keyframes drift {
+    0%, 100% { transform: translate(0, 0) scale(1); opacity: .55; }
+    33% { transform: translate(40px, -50px) scale(1.15); opacity: .9; }
+    66% { transform: translate(-30px, 30px) scale(.9); opacity: .4; }
+  }
+
+  main {
+    position: relative; z-index: 1;
+    max-width: 720px; margin: 0 auto; padding: 48px 16px 64px;
+  }
+  header { text-align: center; margin-bottom: 28px; }
+  header .seal {
+    display: inline-block; font-size: 13px; letter-spacing: .3em; color: var(--fire);
+    border: 1px solid var(--line); padding: 4px 12px; border-radius: 999px; margin-bottom: 14px;
+  }
+  h1 {
+    margin: 0; font-size: clamp(32px, 7vw, 52px); font-weight: 700; letter-spacing: .04em;
+    text-shadow: 0 0 18px rgba(111,247,224,.45), 0 0 48px rgba(58,140,255,.25);
+  }
+  header p { color: var(--muted); margin: 10px 0 0; line-height: 1.6; }
+
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
+    padding: 20px; backdrop-filter: blur(6px); margin-bottom: 18px;
+  }
+
+  canvas { display: block; width: 100%; height: 160px; border-radius: 12px; background: #04050a; }
+  .status { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 14px; color: var(--muted); }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #444; margin-right: 6px; vertical-align: middle; }
+  .dot.on { background: var(--fire); box-shadow: 0 0 10px var(--fire); }
+  .dot.rec { background: var(--ember); box-shadow: 0 0 10px var(--ember); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+  button, .btn {
+    font: inherit; font-size: 16px; cursor: pointer; text-decoration: none;
+    color: var(--text); background: rgba(111,247,224,.06);
+    border: 1px solid var(--line); border-radius: 12px; padding: 12px 20px;
+    transition: background .2s, box-shadow .2s, border-color .2s;
+  }
+  button:hover:not(:disabled), .btn:hover { background: rgba(111,247,224,.14); border-color: var(--fire); box-shadow: 0 0 16px rgba(111,247,224,.25); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  button.primary { border-color: var(--fire); color: var(--fire); }
+  button.recording { border-color: var(--ember); color: var(--ember); background: rgba(255,90,60,.1); }
+
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .presets button { font-size: 14px; padding: 8px 14px; }
+  .presets button.active { border-color: var(--fire); color: var(--fire); }
+
+  .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 22px; }
+  @media (max-width: 560px) { .sliders { grid-template-columns: 1fr; } }
+  label { display: block; font-size: 14px; color: var(--muted); }
+  label span { float: right; color: var(--fire); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--fire); margin-top: 6px; }
+  .monitor { margin-top: 16px; font-size: 14px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+  .monitor input { accent-color: var(--fire); width: 16px; height: 16px; }
+
+  h2 { font-size: 18px; margin: 0 0 12px; color: var(--fire); font-weight: 400; letter-spacing: .08em; }
+  .takes { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .take { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+  .take .name { min-width: 72px; font-size: 14px; color: var(--muted); }
+  .take audio { flex: 1 1 260px; min-width: 0; height: 40px; }
+  .take .btn { font-size: 14px; padding: 8px 14px; }
+  .empty { color: var(--muted); font-size: 14px; text-align: center; padding: 8px 0; }
+  .error { color: var(--ember); font-size: 14px; text-align: center; margin-top: 12px; min-height: 1em; }
+</style>
+</head>
+<body>
+<div class="wisps"><div class="wisp"></div><div class="wisp"></div><div class="wisp"></div></div>
+
+<main>
+  <header>
+    <div class="seal">鬼 · 도깨비</div>
+    <h1>도깨비 목소리</h1>
+    <p>마이크를 켜고 “아~” 하고 소리 내 보세요.<br>당신의 목소리가 도깨비의 울림으로 바뀝니다.</p>
+  </header>
+
+  <section class="panel">
+    <canvas id="viz"></canvas>
+    <div class="status">
+      <div><span class="dot" id="dot"></span><span id="statusText">마이크 꺼짐</span></div>
+      <div id="timer">00:00</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="buttons">
+      <button id="micBtn" class="primary">🔥 마이크 켜기</button>
+      <button id="recBtn" disabled>● 녹음 시작</button>
+    </div>
+    <div class="error" id="error"></div>
+  </section>
+
+  <section class="panel">
+    <h2>도깨비 술법</h2>
+    <div class="presets" id="presets">
+      <button data-preset="chief" class="active">도깨비 대장</button>
+      <button data-preset="echo">신비한 메아리</button>
+      <button data-preset="imp">장난꾸러기</button>
+      <button data-preset="none">원래 목소리</button>
+    </div>
+    <div class="sliders">
+      <label>음높이 <span id="pitchVal"></span><input type="range" id="pitch" min="0.4" max="1.6" step="0.01"></label>
+      <label>웅장함 (저음 겹침) <span id="subVal"></span><input type="range" id="sub" min="0" max="1" step="0.01"></label>
+      <label>울림 (리버브) <span id="reverbVal"></span><input type="range" id="reverb" min="0" max="1" step="0.01"></label>
+      <label>메아리 <span id="echoVal"></span><input type="range" id="echo" min="0" max="1" step="0.01"></label>
+    </div>
+    <div class="monitor">
+      <input type="checkbox" id="monitor">
+      <label for="monitor" style="display:inline">변조된 목소리 실시간으로 듣기 (이어폰 권장 — 스피커는 하울링 위험)</label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>녹음한 목소리</h2>
+    <ul class="takes" id="takes"></ul>
+    <div class="empty" id="empty">아직 녹음이 없어요.</div>
+  </section>
+</main>
+
+<script>
+// ---------- 피치 시프터 (AudioWorklet, 두 개의 그레인을 교차시키는 딜레이 라인 방식) ----------
+const workletCode = `
+class PitchShifter extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [{ name: 'pitch', defaultValue: 0.7, minValue: 0.25, maxValue: 2, automationRate: 'k-rate' }];
+  }
+  constructor() {
+    super();
+    this.buf = new Float32Array(16384);
+    this.w = 0;
+    this.phase = 0;
+    this.grain = Math.floor(sampleRate * 0.07);
+  }
+  read(delay) {
+    const N = this.buf.length;
+    let pos = this.w - delay - 2;
+    while (pos < 0) pos += N;
+    const i = Math.floor(pos), f = pos - i;
+    return this.buf[i % N] * (1 - f) + this.buf[(i + 1) % N] * f;
+  }
+  process(inputs, outputs, params) {
+    const inp = inputs[0] && inputs[0][0];
+    const out = outputs[0];
+    const pitch = params.pitch[0];
+    const G = this.grain, N = this.buf.length;
+    const step = (1 - pitch) / G;
+    for (let n = 0; n < out[0].length; n++) {
+      this.buf[this.w] = inp ? inp[n] : 0;
+      this.phase += step;
+      this.phase -= Math.floor(this.phase);
+      const p2 = (this.phase + 0.5) % 1;
+      const g1 = Math.sin(Math.PI * this.phase) ** 2;
+      const g2 = Math.sin(Math.PI * p2) ** 2;
+      const y = this.read(this.phase * G) * g1 + this.read(p2 * G) * g2;
+      for (let c = 0; c < out.length; c++) out[c][n] = y;
+      this.w = (this.w + 1) % N;
+    }
+    return true;
+  }
+}
+registerProcessor('pitch-shifter', PitchShifter);
+`;
+
+const PRESETS = {
+  chief: { pitch: 0.68, sub: 0.55, reverb: 0.45, echo: 0.15 },
+  echo:  { pitch: 0.82, sub: 0.2,  reverb: 0.8,  echo: 0.6 },
+  imp:   { pitch: 1.35, sub: 0,    reverb: 0.3,  echo: 0.25 },
+  none:  { pitch: 1.0,  sub: 0,    reverb: 0,    echo: 0 },
+};
+
+const $ = id => document.getElementById(id);
+const ui = {
+  pitch: $('pitch'), sub: $('sub'), reverb: $('reverb'), echo: $('echo'),
+  monitor: $('monitor'), micBtn: $('micBtn'), recBtn: $('recBtn'),
+  dot: $('dot'), statusText: $('statusText'), timer: $('timer'), error: $('error'),
+  takes: $('takes'), empty: $('empty'), canvas: $('viz'),
+};
+
+let ctx, stream, nodes, recorder, chunks = [], recStart = 0, timerId, takeCount = 0;
+
+function applyPreset(name) {
+  const p = PRESETS[name];
+  for (const k of ['pitch', 'sub', 'reverb', 'echo']) ui[k].value = p[k];
+  document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('active', b.dataset.preset === name));
+  updateParams();
+}
+
+function updateParams() {
+  $('pitchVal').textContent = '×' + Number(ui.pitch.value).toFixed(2);
+  $('subVal').textContent = Math.round(ui.sub.value * 100) + '%';
+  $('reverbVal').textContent = Math.round(ui.reverb.value * 100) + '%';
+  $('echoVal').textContent = Math.round(ui.echo.value * 100) + '%';
+  if (!nodes) return;
+  const t = ctx.currentTime, s = 0.05;
+  const pitch = Number(ui.pitch.value);
+  nodes.shifter.parameters.get('pitch').setTargetAtTime(pitch, t, s);
+  nodes.subShifter.parameters.get('pitch').setTargetAtTime(Math.max(0.25, pitch * 0.5), t, s);
+  nodes.subGain.gain.setTargetAtTime(Number(ui.sub.value) * 0.9, t, s);
+  const rv = Number(ui.reverb.value);
+  nodes.wet.gain.setTargetAtTime(rv * 1.4, t, s);
+  nodes.dry.gain.setTargetAtTime(1 - rv * 0.45, t, s);
+  const ec = Number(ui.echo.value);
+  nodes.echoSend.gain.setTargetAtTime(ec * 0.7, t, s);
+  nodes.echoFb.gain.setTargetAtTime(ec * 0.55, t, s);
+  nodes.monitor.gain.setTargetAtTime(ui.monitor.checked ? 1 : 0, t, s);
+}
+
+// 동굴 같은 울림을 위한 인공 임펄스 응답
+function makeImpulse(seconds = 4, decay = 2.6) {
+  const len = Math.floor(ctx.sampleRate * seconds);
+  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+  for (let c = 0; c < 2; c++) {
+    const d = ir.getChannelData(c);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+  }
+  return ir;
+}
+
+function makeGrowlCurve(amount = 3) {
+  const n = 2048, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1;
+    curve[i] = Math.tanh(amount * x) / Math.tanh(amount);
+  }
+  return curve;
+}
+
+async function startMic() {
+  ui.error.textContent = '';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+    });
+  } catch (e) {
+    ui.error.textContent = '마이크 권한을 받지 못했어요. 브라우저 주소창의 마이크 권한을 확인해 주세요.';
+    return;
+  }
+
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const url = URL.createObjectURL(new Blob([workletCode], { type: 'application/javascript' }));
+  await ctx.audioWorklet.addModule(url);
+  URL.revokeObjectURL(url);
+
+  const src = ctx.createMediaStreamSource(stream);
+  const inputGain = ctx.createGain(); inputGain.gain.value = 1.2;
+
+  const shifter = new AudioWorkletNode(ctx, 'pitch-shifter');
+  const subShifter = new AudioWorkletNode(ctx, 'pitch-shifter');
+  const subGain = ctx.createGain();
+
+  // 저음 강조 + 고음 어둡게 + 약간의 거친 질감
+  const lowShelf = ctx.createBiquadFilter(); lowShelf.type = 'lowshelf'; lowShelf.frequency.value = 220; lowShelf.gain.value = 7;
+  const lowpass = ctx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 4200; lowpass.Q.value = 0.6;
+  const growl = ctx.createWaveShaper(); growl.curve = makeGrowlCurve(2.2); growl.oversample = '2x';
+  const voice = ctx.createGain();
+
+  // 리버브
+  const convolver = ctx.createConvolver(); convolver.buffer = makeImpulse();
+  const wet = ctx.createGain(), dry = ctx.createGain();
+
+  // 메아리 (피드백 딜레이)
+  const echoSend = ctx.createGain();
+  const delay = ctx.createDelay(2); delay.delayTime.value = 0.38;
+  const echoFb = ctx.createGain();
+  const echoTone = ctx.createBiquadFilter(); echoTone.type = 'lowpass'; echoTone.frequency.value = 2400;
+
+  const master = ctx.createDynamicsCompressor();
+  master.threshold.value = -18; master.ratio.value = 4;
+  const analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
+  const monitor = ctx.createGain(); monitor.gain.value = 0;
+  const recDest = ctx.createMediaStreamDestination();
+
+  src.connect(inputGain);
+  inputGain.connect(shifter);
+  inputGain.connect(subShifter); subShifter.connect(subGain);
+  shifter.connect(lowShelf); subGain.connect(lowShelf);
+  lowShelf.connect(lowpass).connect(growl).connect(voice);
+
+  voice.connect(dry).connect(master);
+  voice.connect(convolver).connect(wet).connect(master);
+  voice.connect(echoSend).connect(delay);
+  delay.connect(echoTone).connect(echoFb).connect(delay);
+  delay.connect(convolver);
+  delay.connect(master);
+
+  master.connect(analyser);
+  master.connect(recDest);
+  master.connect(monitor).connect(ctx.destination);
+
+  nodes = { shifter, subShifter, subGain, wet, dry, echoSend, echoFb, monitor, analyser, recDest };
+  updateParams();
+
+  ui.micBtn.textContent = '🌑 마이크 끄기';
+  ui.recBtn.disabled = false;
+  ui.dot.className = 'dot on';
+  ui.statusText.textContent = '듣고 있어요 — “아~” 해 보세요';
+  draw();
+}
+
+function stopMic() {
+  if (recorder && recorder.state === 'recording') stopRecording();
+  stream.getTracks().forEach(t => t.stop());
+  ctx.close();
+  ctx = stream = nodes = null;
+  ui.micBtn.textContent = '🔥 마이크 켜기';
+  ui.recBtn.disabled = true;
+  ui.dot.className = 'dot';
+  ui.statusText.textContent = '마이크 꺼짐';
+}
+
+function pickMime() {
+  const types = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4', 'audio/webm'];
+  return types.find(t => window.MediaRecorder && MediaRecorder.isTypeSupported(t)) || '';
+}
+
+function startRecording() {
+  const mimeType = pickMime();
+  recorder = new MediaRecorder(nodes.recDest.stream, mimeType ? { mimeType } : undefined);
+  chunks = [];
+  recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+  recorder.onstop = addTake;
+  recorder.start();
+  recStart = Date.now();
+  timerId = setInterval(tick, 200);
+  ui.recBtn.textContent = '■ 녹음 멈추기';
+  ui.recBtn.classList.add('recording');
+  ui.dot.className = 'dot rec';
+  ui.statusText.textContent = '녹음 중…';
+}
+
+function stopRecording() {
+  recorder.stop();
+  clearInterval(timerId);
+  ui.recBtn.textContent = '● 녹음 시작';
+  ui.recBtn.classList.remove('recording');
+  ui.dot.className = 'dot on';
+  ui.statusText.textContent = '듣고 있어요 — “아~” 해 보세요';
+}
+
+function tick() {
+  const s = Math.floor((Date.now() - recStart) / 1000);
+  ui.timer.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+}
+
+function addTake() {
+  const type = recorder.mimeType || 'audio/webm';
+  const blob = new Blob(chunks, { type });
+  const url = URL.createObjectURL(blob);
+  const ext = type.includes('mp4') ? 'm4a' : type.includes('ogg') ? 'ogg' : 'webm';
+  takeCount++;
+
+  const li = document.createElement('li');
+  li.className = 'take';
+  li.innerHTML = `<span class="name">목소리 ${takeCount}</span>
+    <audio controls src="${url}"></audio>
+    <a class="btn" download="dokkaebi-voice-${takeCount}.${ext}" href="${url}">⬇ 다운로드</a>
+    <button class="del">✕</button>`;
+  li.querySelector('.del').onclick = () => { URL.revokeObjectURL(url); li.remove(); ui.empty.hidden = ui.takes.children.length > 0; };
+  ui.takes.prepend(li);
+  ui.empty.hidden = true;
+  ui.timer.textContent = '00:00';
+}
+
+// 도깨비불 시각화
+function draw() {
+  if (!nodes) {
+    const c = ui.canvas.getContext('2d');
+    c.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
+    return;
+  }
+  const cv = ui.canvas, c = cv.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth * dpr, H = cv.clientHeight * dpr;
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+
+  const data = new Uint8Array(nodes.analyser.frequencyBinCount);
+  nodes.analyser.getByteFrequencyData(data);
+  c.fillStyle = 'rgba(4,5,10,0.35)';
+  c.fillRect(0, 0, W, H);
+
+  const bars = 64, used = Math.floor(data.length * 0.35), bw = W / bars;
+  for (let i = 0; i < bars; i++) {
+    let v = 0;
+    const from = Math.floor(i * used / bars), to = Math.floor((i + 1) * used / bars);
+    for (let j = from; j < to; j++) v = Math.max(v, data[j]);
+    const h = (v / 255) * H * 0.95;
+    const x = i * bw + bw / 2;
+    const g = c.createLinearGradient(0, H, 0, H - h);
+    g.addColorStop(0, 'rgba(58,140,255,0.9)');
+    g.addColorStop(0.6, 'rgba(111,247,224,0.85)');
+    g.addColorStop(1, 'rgba(220,255,250,0.0)');
+    c.fillStyle = g;
+    c.beginPath();
+    c.ellipse(x, H - h / 2, bw * 0.38, h / 2 + 1, 0, 0, Math.PI * 2);
+    c.fill();
+  }
+  requestAnimationFrame(draw);
+}
+
+ui.micBtn.onclick = () => (ctx ? stopMic() : startMic());
+ui.recBtn.onclick = () => (recorder && recorder.state === 'recording' ? stopRecording() : startRecording());
+for (const k of ['pitch', 'sub', 'reverb', 'echo']) {
+  ui[k].oninput = () => {
+    document.querySelectorAll('#presets button').forEach(b => b.classList.remove('active'));
+    updateParams();
+  };
+}
+ui.monitor.onchange = updateParams;
+document.querySelectorAll('#presets button').forEach(b => (b.onclick = () => applyPreset(b.dataset.preset)));
+applyPreset('chief');
+</script>
+</body>
+</html>
