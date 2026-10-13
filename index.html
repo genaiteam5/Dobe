@@ -111,7 +111,7 @@
   <header>
     <div class="seal">鬼 · 도깨비</div>
     <h1>도깨비 목소리</h1>
-    <p>마이크를 켜고 “아~” 하고 소리 내 보세요.<br>당신의 목소리가 도깨비의 울림으로 바뀝니다.</p>
+    <p>마이크를 켜고 “아~” 하고 소리 내 보세요.<br>선풍기 앞에서 말하듯 떨리는 도깨비 목소리가 됩니다.</p>
   </header>
 
   <section class="panel">
@@ -133,16 +133,17 @@
   <section class="panel">
     <h2>도깨비 술법</h2>
     <div class="presets" id="presets">
-      <button data-preset="chief" class="active">도깨비 대장</button>
-      <button data-preset="echo">신비한 메아리</button>
-      <button data-preset="imp">장난꾸러기</button>
+      <button data-preset="fan" class="active">선풍기 앞 아~</button>
+      <button data-preset="baby">아기 도깨비</button>
+      <button data-preset="chief">도깨비 대장</button>
       <button data-preset="none">원래 목소리</button>
     </div>
     <div class="sliders">
-      <label>음높이 <span id="pitchVal"></span><input type="range" id="pitch" min="0.4" max="1.6" step="0.01"></label>
-      <label>웅장함 (저음 겹침) <span id="subVal"></span><input type="range" id="sub" min="0" max="1" step="0.01"></label>
+      <label>선풍기 속도 <span id="rateVal"></span><input type="range" id="rate" min="3" max="20" step="0.1"></label>
+      <label>선풍기 세기 <span id="depthVal"></span><input type="range" id="depth" min="0" max="1" step="0.01"></label>
+      <label>목소리 떨림 <span id="wobbleVal"></span><input type="range" id="wobble" min="0" max="1" step="0.01"></label>
+      <label>음높이 <span id="pitchVal"></span><input type="range" id="pitch" min="0.6" max="1.5" step="0.01"></label>
       <label>울림 (리버브) <span id="reverbVal"></span><input type="range" id="reverb" min="0" max="1" step="0.01"></label>
-      <label>메아리 <span id="echoVal"></span><input type="range" id="echo" min="0" max="1" step="0.01"></label>
     </div>
     <div class="monitor">
       <input type="checkbox" id="monitor">
@@ -169,7 +170,7 @@ class PitchShifter extends AudioWorkletProcessor {
     this.buf = new Float32Array(16384);
     this.w = 0;
     this.phase = 0;
-    this.grain = Math.floor(sampleRate * 0.07);
+    this.grain = Math.floor(sampleRate * 0.05);
   }
   read(delay) {
     const N = this.buf.length;
@@ -202,15 +203,16 @@ registerProcessor('pitch-shifter', PitchShifter);
 `;
 
 const PRESETS = {
-  chief: { pitch: 0.68, sub: 0.55, reverb: 0.45, echo: 0.15 },
-  echo:  { pitch: 0.82, sub: 0.2,  reverb: 0.8,  echo: 0.6 },
-  imp:   { pitch: 1.35, sub: 0,    reverb: 0.3,  echo: 0.25 },
-  none:  { pitch: 1.0,  sub: 0,    reverb: 0,    echo: 0 },
+  fan:   { rate: 11, depth: 0.7,  wobble: 0.45, pitch: 1.0,  reverb: 0.12 },
+  baby:  { rate: 9,  depth: 0.55, wobble: 0.6,  pitch: 1.18, reverb: 0.2 },
+  chief: { rate: 6,  depth: 0.35, wobble: 0.25, pitch: 0.75, reverb: 0.5 },
+  none:  { rate: 11, depth: 0,    wobble: 0,    pitch: 1.0,  reverb: 0 },
 };
+const PARAMS = ['rate', 'depth', 'wobble', 'pitch', 'reverb'];
 
 const $ = id => document.getElementById(id);
 const ui = {
-  pitch: $('pitch'), sub: $('sub'), reverb: $('reverb'), echo: $('echo'),
+  rate: $('rate'), depth: $('depth'), wobble: $('wobble'), pitch: $('pitch'), reverb: $('reverb'),
   monitor: $('monitor'), micBtn: $('micBtn'), recBtn: $('recBtn'),
   dot: $('dot'), statusText: $('statusText'), timer: $('timer'), error: $('error'),
   takes: $('takes'), empty: $('empty'), canvas: $('viz'),
@@ -220,28 +222,39 @@ let ctx, stream, nodes, recorder, chunks = [], recStart = 0, timerId, takeCount 
 
 function applyPreset(name) {
   const p = PRESETS[name];
-  for (const k of ['pitch', 'sub', 'reverb', 'echo']) ui[k].value = p[k];
+  for (const k of PARAMS) ui[k].value = p[k];
   document.querySelectorAll('#presets button').forEach(b => b.classList.toggle('active', b.dataset.preset === name));
   updateParams();
 }
 
 function updateParams() {
-  $('pitchVal').textContent = '×' + Number(ui.pitch.value).toFixed(2);
-  $('subVal').textContent = Math.round(ui.sub.value * 100) + '%';
-  $('reverbVal').textContent = Math.round(ui.reverb.value * 100) + '%';
-  $('echoVal').textContent = Math.round(ui.echo.value * 100) + '%';
+  const rate = Number(ui.rate.value), depth = Number(ui.depth.value), wobble = Number(ui.wobble.value);
+  const pitch = Number(ui.pitch.value), rv = Number(ui.reverb.value);
+  $('rateVal').textContent = rate.toFixed(1) + 'Hz';
+  $('depthVal').textContent = Math.round(depth * 100) + '%';
+  $('wobbleVal').textContent = Math.round(wobble * 100) + '%';
+  $('pitchVal').textContent = '×' + pitch.toFixed(2);
+  $('reverbVal').textContent = Math.round(rv * 100) + '%';
   if (!nodes) return;
   const t = ctx.currentTime, s = 0.05;
-  const pitch = Number(ui.pitch.value);
+
+  // 선풍기 날개: 같은 LFO가 소리 크기(끊김)와 아주 작은 음높이 흔들림(떨림)을 함께 만든다
+  nodes.lfo.frequency.setTargetAtTime(rate, t, s);
+  nodes.chop.gain.setTargetAtTime(-depth * 0.85, t, s);
+  // 딜레이 변조 폭은 속도에 반비례하게 잡아서 속도를 바꿔도 떨림 정도(약 ±3%)가 일정하도록
+  nodes.vibrato.gain.setTargetAtTime((wobble * 0.03) / (2 * Math.PI * rate), t, s);
+
+  // 음높이 ×1.00 근처면 피치 시프터를 거치지 않아 원래 목소리 그대로
+  const shifted = Math.abs(pitch - 1) > 0.02;
   nodes.shifter.parameters.get('pitch').setTargetAtTime(pitch, t, s);
-  nodes.subShifter.parameters.get('pitch').setTargetAtTime(Math.max(0.25, pitch * 0.5), t, s);
-  nodes.subGain.gain.setTargetAtTime(Number(ui.sub.value) * 0.9, t, s);
-  const rv = Number(ui.reverb.value);
-  nodes.wet.gain.setTargetAtTime(rv * 1.4, t, s);
-  nodes.dry.gain.setTargetAtTime(1 - rv * 0.45, t, s);
-  const ec = Number(ui.echo.value);
-  nodes.echoSend.gain.setTargetAtTime(ec * 0.7, t, s);
-  nodes.echoFb.gain.setTargetAtTime(ec * 0.55, t, s);
+  nodes.direct.gain.setTargetAtTime(shifted ? 0 : 1, t, 0.02);
+  nodes.shiftOut.gain.setTargetAtTime(shifted ? 1 : 0, t, 0.02);
+  // 높은 목소리는 살짝 밝게, 낮은 목소리는 저음을 살짝 보강
+  nodes.tone.gain.setTargetAtTime(pitch >= 1 ? (pitch - 1) * 14 : 0, t, s);
+  nodes.body.gain.setTargetAtTime(pitch < 1 ? (1 - pitch) * 16 : 0, t, s);
+
+  nodes.wet.gain.setTargetAtTime(rv * 1.2, t, s);
+  nodes.dry.gain.setTargetAtTime(1 - rv * 0.4, t, s);
   nodes.monitor.gain.setTargetAtTime(ui.monitor.checked ? 1 : 0, t, s);
 }
 
@@ -256,11 +269,12 @@ function makeImpulse(seconds = 4, decay = 2.6) {
   return ir;
 }
 
-function makeGrowlCurve(amount = 3) {
-  const n = 2048, curve = new Float32Array(n);
+// 사인 LFO를 '날개가 지나갈 때만 소리가 푹 꺼지는' 모양의 0~1 펄스로 바꾸는 곡선
+function makeBladeCurve() {
+  const n = 1024, curve = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     const x = (i / (n - 1)) * 2 - 1;
-    curve[i] = Math.tanh(amount * x) / Math.tanh(amount);
+    curve[i] = Math.pow((x + 1) / 2, 2.5);
   }
   return curve;
 }
@@ -284,50 +298,49 @@ async function startMic() {
   const src = ctx.createMediaStreamSource(stream);
   const inputGain = ctx.createGain(); inputGain.gain.value = 1.2;
 
+  // 원래 목소리 / 피치 시프트 목소리 중 하나를 통과
+  const direct = ctx.createGain();
   const shifter = new AudioWorkletNode(ctx, 'pitch-shifter');
-  const subShifter = new AudioWorkletNode(ctx, 'pitch-shifter');
-  const subGain = ctx.createGain();
+  const shiftOut = ctx.createGain(); shiftOut.gain.value = 0;
 
-  // 저음 강조 + 고음 어둡게 + 약간의 거친 질감
-  const lowShelf = ctx.createBiquadFilter(); lowShelf.type = 'lowshelf'; lowShelf.frequency.value = 220; lowShelf.gain.value = 7;
-  const lowpass = ctx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 4200; lowpass.Q.value = 0.6;
-  const growl = ctx.createWaveShaper(); growl.curve = makeGrowlCurve(2.2); growl.oversample = '2x';
+  // 선풍기 효과: 떨림(딜레이 변조) → 음색 → 끊김(볼륨 변조)
+  const vib = ctx.createDelay(0.05); vib.delayTime.value = 0.006;
+  const body = ctx.createBiquadFilter(); body.type = 'lowshelf'; body.frequency.value = 250;
+  const tone = ctx.createBiquadFilter(); tone.type = 'highshelf'; tone.frequency.value = 3000;
+  const trem = ctx.createGain(); trem.gain.value = 1;
+  const lfo = ctx.createOscillator(); lfo.type = 'sine';
+  const blade = ctx.createWaveShaper(); blade.curve = makeBladeCurve();
+  const chop = ctx.createGain();
+  const vibrato = ctx.createGain();
   const voice = ctx.createGain();
 
-  // 리버브
-  const convolver = ctx.createConvolver(); convolver.buffer = makeImpulse();
+  // 리버브 (작은 방 정도의 짧은 울림)
+  const convolver = ctx.createConvolver(); convolver.buffer = makeImpulse(2.2, 3);
   const wet = ctx.createGain(), dry = ctx.createGain();
 
-  // 메아리 (피드백 딜레이)
-  const echoSend = ctx.createGain();
-  const delay = ctx.createDelay(2); delay.delayTime.value = 0.38;
-  const echoFb = ctx.createGain();
-  const echoTone = ctx.createBiquadFilter(); echoTone.type = 'lowpass'; echoTone.frequency.value = 2400;
-
   const master = ctx.createDynamicsCompressor();
-  master.threshold.value = -18; master.ratio.value = 4;
+  master.threshold.value = -16; master.ratio.value = 3;
   const analyser = ctx.createAnalyser(); analyser.fftSize = 2048;
   const monitor = ctx.createGain(); monitor.gain.value = 0;
   const recDest = ctx.createMediaStreamDestination();
 
   src.connect(inputGain);
-  inputGain.connect(shifter);
-  inputGain.connect(subShifter); subShifter.connect(subGain);
-  shifter.connect(lowShelf); subGain.connect(lowShelf);
-  lowShelf.connect(lowpass).connect(growl).connect(voice);
+  inputGain.connect(direct).connect(vib);
+  inputGain.connect(shifter).connect(shiftOut).connect(vib);
+  vib.connect(body).connect(tone).connect(trem).connect(voice);
+
+  lfo.connect(blade).connect(chop).connect(trem.gain);
+  lfo.connect(vibrato).connect(vib.delayTime);
+  lfo.start();
 
   voice.connect(dry).connect(master);
   voice.connect(convolver).connect(wet).connect(master);
-  voice.connect(echoSend).connect(delay);
-  delay.connect(echoTone).connect(echoFb).connect(delay);
-  delay.connect(convolver);
-  delay.connect(master);
 
   master.connect(analyser);
   master.connect(recDest);
   master.connect(monitor).connect(ctx.destination);
 
-  nodes = { shifter, subShifter, subGain, wet, dry, echoSend, echoFb, monitor, analyser, recDest };
+  nodes = { direct, shifter, shiftOut, body, tone, lfo, chop, vibrato, wet, dry, monitor, analyser, recDest };
   updateParams();
 
   ui.micBtn.textContent = '🌑 마이크 끄기';
@@ -439,7 +452,7 @@ function draw() {
 
 ui.micBtn.onclick = () => (ctx ? stopMic() : startMic());
 ui.recBtn.onclick = () => (recorder && recorder.state === 'recording' ? stopRecording() : startRecording());
-for (const k of ['pitch', 'sub', 'reverb', 'echo']) {
+for (const k of PARAMS) {
   ui[k].oninput = () => {
     document.querySelectorAll('#presets button').forEach(b => b.classList.remove('active'));
     updateParams();
@@ -447,7 +460,7 @@ for (const k of ['pitch', 'sub', 'reverb', 'echo']) {
 }
 ui.monitor.onchange = updateParams;
 document.querySelectorAll('#presets button').forEach(b => (b.onclick = () => applyPreset(b.dataset.preset)));
-applyPreset('chief');
+applyPreset('fan');
 </script>
 </body>
 </html>
